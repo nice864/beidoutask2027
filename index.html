@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>北斗戰術終端：補給點定位系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #f8fafc; /* 淺色背景 slate-50 */
+            color: #334155; /* 深灰文字 slate-700 */
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        .panel {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+            border-radius: 16px;
+        }
+        input[type="number"] {
+            background-color: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            color: #0f172a;
+            text-align: center;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background-color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        canvas {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+        }
+        /* 極簡按鈕樣式 */
+        .btn-primary {
+            background-color: #0f172a;
+            color: white;
+            transition: transform 0.1s, background-color 0.2s;
+        }
+        .btn-primary:hover {
+            background-color: #334155;
+            transform: translateY(-1px);
+        }
+        .btn-primary:active {
+            transform: translateY(1px);
+        }
+        .btn-secondary {
+            background-color: #f1f5f9;
+            color: #475569;
+            border: 1px solid #cbd5e1;
+            transition: all 0.2s;
+        }
+        .btn-secondary:hover {
+            background-color: #e2e8f0;
+            color: #0f172a;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-10">
+
+    <header class="mb-8 text-center relative w-full max-w-[1400px] px-6">
+        <div class="absolute right-6 top-0 text-sm z-10">
+            <select id="langSwitch" onchange="changeLanguage(this.value)" class="bg-white border border-slate-300 rounded px-2 py-1 text-slate-700 outline-none focus:border-blue-500 shadow-sm cursor-pointer">
+                <option value="zh-TW">繁體中文</option>
+                <option value="zh-CN">简体中文</option>
+                <option value="en">English</option>
+            </select>
+        </div>
+        <h1 class="text-3xl font-bold tracking-tight text-slate-900 flex items-center justify-center gap-3">
+            <span class="text-blue-600">📡</span> <span data-i18n="title">北斗戰術終端：補給點定位系統</span>
+        </h1>
+        <p class="text-slate-500 mt-3 text-sm" data-i18n="desc">輸入 3 座訊號塔的網格座標與探測距離，系統將自動解算補給點的精確方格。</p>
+    </header>
+
+    <main class="flex flex-col xl:flex-row gap-6 w-full max-w-[1400px] px-6 justify-center items-start">
+        
+        <!-- 左側：雷達地圖 -->
+        <div class="panel p-5 flex-shrink-0 overflow-x-auto w-full xl:w-auto">
+            <div class="flex justify-between items-center mb-4 px-2">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-lg font-semibold text-slate-800" data-i18n="gridTitle">戰術網格視圖</h2>
+                    <button onclick="resetAll()" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 px-2.5 py-1 rounded border border-rose-200 transition-colors shadow-sm flex items-center gap-1">
+                        <span data-i18n="resetBtn">🗑️ 清空重置</span>
+                    </button>
+                </div>
+                <span class="text-xs font-medium px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full border border-slate-200" data-i18n="gridSize">
+                    網格：25 x 13
+                </span>
+            </div>
+            <!-- 加大 Canvas 尺寸以容納方格中心繪製，並加入 touch-none 避免手機滑動干擾繪製 -->
+            <div class="relative w-fit mx-auto cursor-crosshair">
+                <canvas id="radarCanvas" width="900" height="500" class="mx-auto block touch-none"></canvas>
+                <!-- 互動繪製指示浮層 -->
+                <div id="draw-instruction" class="absolute top-6 left-1/2 -translate-x-1/2 bg-slate-800/95 text-white px-5 py-2.5 rounded-full shadow-xl text-sm font-medium hidden pointer-events-none transition-opacity flex items-center gap-2 z-10 backdrop-blur-sm border border-slate-600">
+                    <span class="animate-pulse text-sky-400">●</span>
+                    <span id="draw-instruction-text">請點擊選擇中心位置</span>
+                </div>
+            </div>
+            <div class="text-center text-xs text-slate-400 mt-3 flex justify-between px-4">
+                <span data-i18n="gridNote1">(0,0) 位於左下角方格</span>
+                <span data-i18n="gridNote2">座標為方格中心點</span>
+            </div>
+        </div>
+
+        <!-- 右側：控制面板 -->
+        <div class="panel p-6 flex-grow w-full xl:w-[450px]">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-lg font-semibold text-slate-800" data-i18n="dataTitle">數據輸入終端</h2>
+                <button onclick="generateMission()" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium shadow-sm" data-i18n="randomBtn">
+                    ⟳ 隨機測試數據
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <!-- 塔 1 -->
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-rose-500"></div>
+                    <div class="font-semibold text-slate-700 mb-3 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <div class="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
+                            <span data-i18n="tower1">北斗塔 Alpha</span>
+                        </div>
+                        <button onclick="startDrawMode(1)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded border border-slate-200 transition-colors shadow-sm flex items-center gap-1" data-i18n="drawBtn">
+                            📍 互動點選
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblX">X 座標 (0-24)</label><input type="number" id="t1-x" class="w-full h-10" min="0" max="24" step="1"></div>
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblY">Y 座標 (0-12)</label><input type="number" id="t1-y" class="w-full h-10" min="0" max="12" step="1"></div>
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblR">距離 R</label><input type="number" id="t1-r" class="w-full h-10" min="0" step="0.01"></div>
+                    </div>
+                </div>
+
+                <!-- 塔 2 -->
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-500"></div>
+                    <div class="font-semibold text-slate-700 mb-3 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <div class="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                            <span data-i18n="tower2">北斗塔 Beta</span>
+                        </div>
+                        <button onclick="startDrawMode(2)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded border border-slate-200 transition-colors shadow-sm flex items-center gap-1" data-i18n="drawBtn">
+                            📍 互動點選
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblX">X 座標 (0-24)</label><input type="number" id="t2-x" class="w-full h-10" min="0" max="24" step="1"></div>
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblY">Y 座標 (0-12)</label><input type="number" id="t2-y" class="w-full h-10" min="0" max="12" step="1"></div>
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblR">距離 R</label><input type="number" id="t2-r" class="w-full h-10" min="0" step="0.01"></div>
+                    </div>
+                </div>
+
+                <!-- 塔 3 -->
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-500"></div>
+                    <div class="font-semibold text-slate-700 mb-3 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <div class="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                            <span data-i18n="tower3">北斗塔 Gamma</span>
+                        </div>
+                        <button onclick="startDrawMode(3)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded border border-slate-200 transition-colors shadow-sm flex items-center gap-1" data-i18n="drawBtn">
+                            📍 互動點選
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblX">X 座標 (0-24)</label><input type="number" id="t3-x" class="w-full h-10" min="0" max="24" step="1"></div>
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblY">Y 座標 (0-12)</label><input type="number" id="t3-y" class="w-full h-10" min="0" max="12" step="1"></div>
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblR">距離 R</label><input type="number" id="t3-r" class="w-full h-10" min="0" step="0.01"></div>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="calculateLocation()" class="w-full btn-primary font-bold text-base py-3.5 rounded-xl mt-6 shadow-md flex justify-center items-center gap-2">
+                <span>⊕</span> <span data-i18n="calcBtn">執行三角定位解算</span>
+            </button>
+
+            <!-- 結果顯示區 -->
+            <div id="result-box" class="mt-6 hidden bg-blue-50 border border-blue-100 p-5 rounded-xl text-center">
+                <div class="text-sm font-medium text-blue-800" data-i18n="resultTitle">目標鎖定：補給點方格座標</div>
+                <div id="result-text" class="text-4xl font-mono font-bold text-blue-600 mt-2 tracking-wider">
+                    (X, Y)
+                </div>
+                <div id="error-warn" class="text-xs text-rose-500 mt-3 font-medium hidden bg-rose-50 p-2 rounded border border-rose-100" data-i18n="errorWarn">
+                    ⚠️ 數據誤差修正：信號未完美交會，已套用網格吸附演算法找出最可能方格。
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const canvas = document.getElementById('radarCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 畫布與網格設定
+        const GRID_COLS = 25; // X軸格子數 (0~24)
+        const GRID_ROWS = 13; // Y軸格子數 (0~12)
+        const CELL_SIZE = 32; // 每個正方形格子的邊長 (像素)
+        
+        // 邊距計算，讓網格置中
+        const MARGIN_X = (canvas.width - (GRID_COLS * CELL_SIZE)) / 2;
+        const MARGIN_Y = (canvas.height - (GRID_ROWS * CELL_SIZE)) / 2;
+        
+        // 座標轉換函數：數學網格座標 (方格) -> Canvas像素座標 (方格中心點)
+        // x=0, y=0 會是左下角第一個格子的中心
+        function getCanvasX(x) { 
+            return MARGIN_X + (x * CELL_SIZE) + (CELL_SIZE / 2); 
+        }
+        function getCanvasY(y) { 
+            // Canvas 的 Y 軸是向下的，數學座標是向上的
+            // 左下角的 y=0 對應到 canvas 的最底部的格子
+            return canvas.height - MARGIN_Y - (y * CELL_SIZE) - (CELL_SIZE / 2); 
+        }
+
+        let currentTowers = [];
+        let calculatedPoint = null;
+
+        // --- 互動繪製狀態 ---
+        let drawMode = {
+            active: false,
+            towerIdx: 1, 
+            step: 0, // 0: 關閉, 1: 選擇中心, 2: 選擇半徑
+            centerX: 0,
+            centerY: 0,
+            hoverGridX: 0,
+            hoverGridY: 0
+        };
+
+        // --- 語言包與重置功能 ---
+        let currentLang = 'zh-TW';
+        const translations = {
+            'zh-TW': {
+                title: '北斗戰術終端：補給點定位系統',
+                desc: '輸入 3 座訊號塔的網格座標與探測距離，系統將自動解算補給點的精確方格。',
+                gridTitle: '戰術網格視圖',
+                gridSize: '網格：25 x 13',
+                resetBtn: '🗑️ 清空重置',
+                gridNote1: '(0,0) 位於左下角方格',
+                gridNote2: '座標為方格中心點',
+                dataTitle: '數據輸入終端',
+                randomBtn: '⟳ 隨機測試數據',
+                tower1: '北斗塔 Alpha',
+                tower2: '北斗塔 Beta',
+                tower3: '北斗塔 Gamma',
+                drawBtn: '📍 互動點選',
+                lblX: 'X 座標 (0-24)',
+                lblY: 'Y 座標 (0-12)',
+                lblR: '距離 R',
+                calcBtn: '執行三角定位解算',
+                resultTitle: '目標鎖定：補給點方格座標',
+                errorWarn: '⚠️ 數據誤差修正：信號未完美交會，已套用網格吸附演算法找出最可能方格。',
+                msg_incomplete: '請完整輸入三座塔的 X, Y, R 數據！',
+                inst_step1: '【北斗塔 {tower}】請點擊目標方格設定中心 (X, Y)',
+                inst_step2: '【北斗塔 {tower}】點擊第二下確認探測距離 (R)'
+            },
+            'zh-CN': {
+                title: '北斗战术终端：补给点定位系统',
+                desc: '输入 3 座北斗塔的网格坐标与探测距离，系统将自动解算补给点的精确方格。',
+                gridTitle: '战术网格视图',
+                gridSize: '网格：25 x 13',
+                resetBtn: '🗑️ 清空重置',
+                gridNote1: '(0,0) 位于左下角方格',
+                gridNote2: '坐标为方格中心点',
+                dataTitle: '数据输入终端',
+                randomBtn: '⟳ 随机测试数据',
+                tower1: '北斗塔 Alpha',
+                tower2: '北斗塔 Beta',
+                tower3: '北斗塔 Gamma',
+                drawBtn: '📍 互动点选',
+                lblX: 'X 坐标 (0-24)',
+                lblY: 'Y 坐标 (0-12)',
+                lblR: '距离 R',
+                calcBtn: '执行三角定位解算',
+                resultTitle: '目标锁定：补给点方格坐标',
+                errorWarn: '⚠️ 数据误差修正：信号未完美交会，已套用网格吸附算法找出最可能方格。',
+                msg_incomplete: '请完整输入三座塔的 X, Y, R 数据！',
+                inst_step1: '【北斗塔 {tower}】请点击目标方格设定中心 (X, Y)',
+                inst_step2: '【北斗塔 {tower}】点击第二下确认探测距离 (R)'
+            },
+            'en': {
+                title: 'Tactical Terminal: Supply Locator',
+                desc: 'Enter coordinates and detection distances of 3 signal towers, the system calculates the exact grid.',
+                gridTitle: 'Tactical Grid View',
+                gridSize: 'Grid: 25 x 13',
+                resetBtn: '🗑️ Reset',
+                gridNote1: '(0,0) is at bottom-left',
+                gridNote2: 'Coordinates are centers',
+                dataTitle: 'Data Input Terminal',
+                randomBtn: '⟳ Random Data',
+                tower1: 'Tower Alpha',
+                tower2: 'Tower Beta',
+                tower3: 'Tower Gamma',
+                drawBtn: '📍 Pick',
+                lblX: 'X Coord (0-24)',
+                lblY: 'Y Coord (0-12)',
+                lblR: 'Distance R',
+                calcBtn: 'Execute Trilateration',
+                resultTitle: 'Target Locked: Supply Point',
+                errorWarn: '⚠️ Error Correction: Signals did not intersect perfectly, applied grid snapping.',
+                msg_incomplete: 'Please enter complete X, Y, R data for all three towers!',
+                inst_step1: '[Tower {tower}] Click a grid to set center (X, Y)',
+                inst_step2: '[Tower {tower}] Click again to confirm distance (R)'
+            }
+        };
+
+        function changeLanguage(lang) {
+            currentLang = lang;
+            const t = translations[lang];
+            
+            // 替換所有具備 data-i18n 的靜態文字
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if(t[key]) el.innerText = t[key];
+            });
+            
+            // 替換所有輸入框的 Label
+            document.querySelectorAll('[data-i18n-lbl]').forEach(el => {
+                const key = el.getAttribute('data-i18n-lbl');
+                if(t[key]) el.innerText = t[key];
+            });
+
+            // 替換動態繪圖教學文字
+            if(drawMode.active) {
+                const towerNames = ['Alpha', 'Beta', 'Gamma'];
+                const stepKey = drawMode.step === 1 ? 'inst_step1' : 'inst_step2';
+                document.getElementById('draw-instruction-text').innerText = t[stepKey].replace('{tower}', towerNames[drawMode.towerIdx-1]);
+            }
+        }
+
+        function resetAll() {
+            // 清除畫圖模式
+            drawMode.active = false;
+            drawMode.step = 0;
+            document.getElementById('draw-instruction').classList.add('hidden');
+            
+            // 清空輸入框
+            for(let i=1; i<=3; i++) {
+                document.getElementById(`t${i}-x`).value = '';
+                document.getElementById(`t${i}-y`).value = '';
+                document.getElementById(`t${i}-r`).value = '';
+            }
+            
+            // 重置系統變數與畫面
+            currentTowers = [];
+            calculatedPoint = null;
+            document.getElementById('result-box').classList.add('hidden');
+            document.getElementById('error-warn').classList.add('hidden');
+            
+            drawMap();
+        }
+
+        // 初始化繪製空地圖
+        drawMap();
+
+        function drawMap() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 1. 畫格子網格線 (邊界)
+            ctx.beginPath();
+            ctx.strokeStyle = '#e2e8f0'; // 淺灰網格線
+            ctx.lineWidth = 1;
+            
+            // 畫垂直線
+            for(let x = 0; x <= GRID_COLS; x++) {
+                const px = MARGIN_X + (x * CELL_SIZE);
+                ctx.moveTo(px, MARGIN_Y);
+                ctx.lineTo(px, canvas.height - MARGIN_Y);
+            }
+            // 畫水平線
+            for(let y = 0; y <= GRID_ROWS; y++) {
+                const py = MARGIN_Y + (y * CELL_SIZE);
+                ctx.moveTo(MARGIN_X, py);
+                ctx.lineTo(canvas.width - MARGIN_X, py);
+            }
+            ctx.stroke();
+
+            // 2. 標註坐標軸文字
+            ctx.fillStyle = '#94a3b8'; // text-slate-400
+            ctx.font = '10px Inter';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // X 軸數字 (標在每格中心下方)
+            for(let x = 0; x < GRID_COLS; x+=2) {
+                const px = getCanvasX(x);
+                const py = canvas.height - MARGIN_Y + 12;
+                ctx.fillText(x, px, py);
+            }
+            // Y 軸數字 (標在每格中心左側)
+            for(let y = 0; y < GRID_ROWS; y+=2) {
+                const px = MARGIN_X - 12;
+                const py = getCanvasY(y);
+                ctx.fillText(y, px, py);
+            }
+
+            // 3. 繪製塔與信號圓
+            // 色系改為較柔和且適合淺色背景的顏色
+            const colors = [
+                { stroke: 'rgba(225, 29, 72, 0.6)', fill: 'rgba(225, 29, 72, 0.08)', dot: '#e11d48' }, // Rose 600
+                { stroke: 'rgba(5, 150, 105, 0.6)', fill: 'rgba(5, 150, 105, 0.08)', dot: '#059669' }, // Emerald 600
+                { stroke: 'rgba(217, 119, 6, 0.6)',  fill: 'rgba(217, 119, 6, 0.08)',  dot: '#d97706' }  // Amber 600
+            ];
+            
+            currentTowers.forEach((tower, i) => {
+                const cx = getCanvasX(tower.x);
+                const cy = getCanvasY(tower.y);
+                // 距離 R 代表幾格的長度
+                const rPix = tower.r * CELL_SIZE;
+                const color = colors[i % 3];
+
+                // 畫圓圈範圍
+                ctx.beginPath();
+                ctx.arc(cx, cy, rPix, 0, Math.PI * 2);
+                ctx.strokeStyle = color.stroke;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                
+                // 畫半透明填充
+                ctx.fillStyle = color.fill;
+                ctx.fill();
+
+                // 畫塔的位置 (方格中心)
+                ctx.beginPath();
+                // 畫一個小正方形代表塔，比較有科技感
+                const dotSize = 6;
+                ctx.rect(cx - dotSize/2, cy - dotSize/2, dotSize, dotSize);
+                ctx.fillStyle = color.dot;
+                ctx.fill();
+                
+                // 標記字 (帶有一點白色背景增加辨識度)
+                const label = `T${i+1}`;
+                const textWidth = ctx.measureText(label).width;
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                ctx.fillRect(cx + 6, cy - 14, textWidth + 4, 14);
+                
+                ctx.fillStyle = color.dot;
+                ctx.font = 'bold 10px Inter';
+                ctx.textAlign = 'left';
+                ctx.fillText(label, cx + 8, cy - 7);
+            });
+
+            // 4. 繪製計算出的補給點
+            if(calculatedPoint) {
+                const px = getCanvasX(calculatedPoint.x);
+                const py = getCanvasY(calculatedPoint.y);
+                
+                // 畫補給點底色高亮整個方格
+                ctx.fillStyle = 'rgba(37, 99, 235, 0.15)'; // Blue 600
+                ctx.fillRect(
+                    MARGIN_X + (calculatedPoint.x * CELL_SIZE), 
+                    canvas.height - MARGIN_Y - (calculatedPoint.y * CELL_SIZE) - CELL_SIZE, 
+                    CELL_SIZE, CELL_SIZE
+                );
+                
+                // 畫目標準星
+                ctx.beginPath();
+                ctx.arc(px, py, 5, 0, Math.PI * 2);
+                ctx.fillStyle = '#2563eb'; // Blue 600
+                ctx.fill();
+                
+                ctx.beginPath();
+                const crossLen = 10;
+                ctx.moveTo(px - crossLen, py); ctx.lineTo(px + crossLen, py);
+                ctx.moveTo(px, py - crossLen); ctx.lineTo(px, py + crossLen);
+                ctx.strokeStyle = '#2563eb';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // 標籤背景
+                const txt = `📦 (${calculatedPoint.x}, ${calculatedPoint.y})`;
+                ctx.font = 'bold 12px Inter';
+                const metrics = ctx.measureText(txt);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.fillRect(px + 12, py - 20, metrics.width + 10, 20);
+                // 標籤文字
+                ctx.fillStyle = '#1d4ed8'; // Blue 700
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(txt, px + 17, py - 10);
+                
+                // 給目標方格加上邊框高亮
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(
+                    MARGIN_X + (calculatedPoint.x * CELL_SIZE), 
+                    canvas.height - MARGIN_Y - (calculatedPoint.y * CELL_SIZE) - CELL_SIZE, 
+                    CELL_SIZE, CELL_SIZE
+                );
+            }
+
+            // 5. 繪製互動輸入模式的預覽介面
+            if (drawMode.active) {
+                const hoverX = getCanvasX(drawMode.hoverGridX);
+                const hoverY = getCanvasY(drawMode.hoverGridY);
+
+                // 步驟 1：高亮滑鼠所在的方格
+                if (drawMode.step === 1) {
+                    ctx.fillStyle = 'rgba(59, 130, 246, 0.2)'; // Blue 500 透明
+                    ctx.fillRect(
+                        MARGIN_X + (drawMode.hoverGridX * CELL_SIZE), 
+                        canvas.height - MARGIN_Y - (drawMode.hoverGridY * CELL_SIZE) - CELL_SIZE, 
+                        CELL_SIZE, CELL_SIZE
+                    );
+                    ctx.strokeStyle = '#3b82f6';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(
+                        MARGIN_X + (drawMode.hoverGridX * CELL_SIZE), 
+                        canvas.height - MARGIN_Y - (drawMode.hoverGridY * CELL_SIZE) - CELL_SIZE, 
+                        CELL_SIZE, CELL_SIZE
+                    );
+                }
+                
+                // 步驟 2：畫出設定的中心點、連線與預覽圓
+                if (drawMode.step === 2) {
+                    const cx = getCanvasX(drawMode.centerX);
+                    const cy = getCanvasY(drawMode.centerY);
+                    let distGrid = Math.sqrt(Math.pow(drawMode.hoverGridX - drawMode.centerX, 2) + Math.pow(drawMode.hoverGridY - drawMode.centerY, 2));
+                    const rPix = distGrid * CELL_SIZE;
+
+                    // 預覽圓 (虛線)
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, rPix, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([6, 6]); 
+                    ctx.stroke();
+                    ctx.setLineDash([]); 
+                    ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+                    ctx.fill();
+
+                    // 中心點
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = '#2563eb';
+                    ctx.fill();
+
+                    // 半徑連線
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy);
+                    ctx.lineTo(hoverX, hoverY);
+                    ctx.strokeStyle = '#2563eb';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                    
+                    // 動態距離文字顯示
+                    const midX = (cx + hoverX) / 2;
+                    const midY = (cy + hoverY) / 2;
+                    const txt = `R: ${distGrid.toFixed(2)}`;
+                    
+                    const textWidth = ctx.measureText(txt).width;
+                    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                    ctx.fillRect(midX - textWidth/2 - 4, midY - 18, textWidth + 8, 16);
+                    
+                    ctx.fillStyle = '#1e293b';
+                    ctx.font = 'bold 11px Inter';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(txt, midX, midY - 10);
+                }
+            }
+        }
+
+        // --- 互動繪製事件處理 ---
+        function startDrawMode(towerIdx) {
+            const towerNames = ['Alpha', 'Beta', 'Gamma'];
+            drawMode.active = true;
+            drawMode.towerIdx = towerIdx;
+            drawMode.step = 1;
+            
+            document.getElementById('draw-instruction').classList.remove('hidden');
+            const towerName = towerNames[towerIdx-1];
+            document.getElementById('draw-instruction-text').innerText = translations[currentLang].inst_step1.replace('{tower}', towerName);
+            drawMap(); 
+        }
+
+        // 轉換 Canvas 座標為網格座標
+        function getEventGridCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            // 處理 CSS 縮放可能導致的座標偏移
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const px = (e.clientX - rect.left) * scaleX;
+            const py = (e.clientY - rect.top) * scaleY;
+            
+            let gridX = Math.floor((px - MARGIN_X) / CELL_SIZE);
+            let gridY = Math.floor((canvas.height - py - MARGIN_Y) / CELL_SIZE);
+            
+            // 限制在地圖邊界內
+            gridX = Math.max(0, Math.min(gridX, GRID_COLS - 1));
+            gridY = Math.max(0, Math.min(gridY, GRID_ROWS - 1));
+            
+            return { gridX, gridY };
+        }
+
+        // 支援滑鼠與觸控移動
+        canvas.addEventListener('pointermove', (e) => {
+            if (!drawMode.active) return;
+            const { gridX, gridY } = getEventGridCoords(e);
+            drawMode.hoverGridX = gridX;
+            drawMode.hoverGridY = gridY;
+            drawMap(); // 觸發重繪顯示預覽
+        });
+
+        // 點擊事件 (支援滑鼠左鍵與手機點擊)
+        canvas.addEventListener('pointerdown', (e) => {
+            if (!drawMode.active) return;
+            // 如果是在觸發選單或右鍵，則忽略
+            if (e.button !== 0 && e.pointerType === 'mouse') return;
+            
+            const { gridX, gridY } = getEventGridCoords(e);
+            
+            if (drawMode.step === 1) {
+                // 記錄中心點並更新輸入框
+                drawMode.centerX = gridX;
+                drawMode.centerY = gridY;
+                document.getElementById(`t${drawMode.towerIdx}-x`).value = gridX;
+                document.getElementById(`t${drawMode.towerIdx}-y`).value = gridY;
+                
+                // 進入畫圓模式
+                drawMode.step = 2;
+                const towerNames = ['Alpha', 'Beta', 'Gamma'];
+                const towerName = towerNames[drawMode.towerIdx-1];
+                document.getElementById('draw-instruction-text').innerText = translations[currentLang].inst_step2.replace('{tower}', towerName);
+                
+                // 強制觸發一次移動邏輯，避免游標原地點擊沒有預覽線
+                drawMode.hoverGridX = gridX;
+                drawMode.hoverGridY = gridY;
+                drawMap();
+            } 
+            else if (drawMode.step === 2) {
+                // 計算並更新距離 R
+                let dist = Math.sqrt(Math.pow(gridX - drawMode.centerX, 2) + Math.pow(gridY - drawMode.centerY, 2));
+                dist = Math.round(dist * 100) / 100; // 取小數第二位
+                document.getElementById(`t${drawMode.towerIdx}-r`).value = dist;
+                
+                // 結束繪製模式
+                drawMode.active = false;
+                drawMode.step = 0;
+                document.getElementById('draw-instruction').classList.add('hidden');
+                
+                // 繪製結果同步到地圖 (即時預覽)
+                updateTowersFromInputs();
+            }
+        });
+
+        // 讀取目前的輸入框數據並重繪預覽圖 (不進行補給點計算)
+        function updateTowersFromInputs() {
+            currentTowers = [];
+            for(let i=1; i<=3; i++) {
+                let x = parseFloat(document.getElementById(`t${i}-x`).value);
+                let y = parseFloat(document.getElementById(`t${i}-y`).value);
+                let r = parseFloat(document.getElementById(`t${i}-r`).value);
+                
+                if(!isNaN(x) && !isNaN(y) && !isNaN(r)) {
+                    // 確保資料不破圖
+                    x = Math.max(0, Math.min(x, GRID_COLS - 1));
+                    y = Math.max(0, Math.min(y, GRID_ROWS - 1));
+                    r = Math.max(0, r);
+                    currentTowers.push({x, y, r});
+                }
+            }
+            // 使用者有新輸入時，清除之前的計算結果與警告
+            calculatedPoint = null;
+            document.getElementById('result-box').classList.add('hidden');
+            drawMap();
+        }
+
+        // 綁定輸入框變更事件，讓手動打字也能即時顯示圓圈
+        for(let i=1; i<=3; i++) {
+            document.getElementById(`t${i}-x`).addEventListener('input', updateTowersFromInputs);
+            document.getElementById(`t${i}-y`).addEventListener('input', updateTowersFromInputs);
+            document.getElementById(`t${i}-r`).addEventListener('input', updateTowersFromInputs);
+        }
+
+        function generateMission() {
+            // 隨機補給點方格 (0-24, 0-12)
+            const targetX = Math.floor(Math.random() * GRID_COLS);
+            const targetY = Math.floor(Math.random() * GRID_ROWS);
+
+            // 產生三個不重複的塔位置，且不等於目標點
+            let towers = [];
+            while(towers.length < 3) {
+                let tx = Math.floor(Math.random() * GRID_COLS);
+                let ty = Math.floor(Math.random() * GRID_ROWS);
+                
+                // 避免塔疊在一起，或是剛好在補給點上
+                let valid = (tx !== targetX || ty !== targetY) && 
+                            !towers.some(t => t.x === tx && t.y === ty);
+                if(valid) {
+                    // 由於座標現在代表方格的「中心」，直接使用網格的整數座標計算距離依然完全正確
+                    let dist = Math.sqrt(Math.pow(tx - targetX, 2) + Math.pow(ty - targetY, 2));
+                    // 為了遊戲性，稍微保留小數點，這樣圓才會準確交會
+                    dist = Math.round(dist * 100) / 100;
+                    towers.push({x: tx, y: ty, r: dist});
+                }
+            }
+
+            // 填入 UI (將字串強制轉字串填入，避免瀏覽器格式問題)
+            for(let i=1; i<=3; i++) {
+                document.getElementById(`t${i}-x`).value = towers[i-1].x;
+                document.getElementById(`t${i}-y`).value = towers[i-1].y;
+                document.getElementById(`t${i}-r`).value = towers[i-1].r;
+            }
+
+            // 結束任何正在進行的繪製模式並更新地圖
+            drawMode.active = false;
+            document.getElementById('draw-instruction').classList.add('hidden');
+            updateTowersFromInputs();
+        }
+
+        function calculateLocation() {
+            // 計算前先確保結束繪製狀態
+            if (drawMode.active) {
+                drawMode.active = false;
+                document.getElementById('draw-instruction').classList.add('hidden');
+            }
+            
+            currentTowers = [];
+            for(let i=1; i<=3; i++) {
+                let x = parseFloat(document.getElementById(`t${i}-x`).value);
+                let y = parseFloat(document.getElementById(`t${i}-y`).value);
+                let r = parseFloat(document.getElementById(`t${i}-r`).value);
+                
+                if(isNaN(x) || isNaN(y) || isNaN(r)) {
+                    // 根據當前語言顯示錯誤警告
+                    alert(translations[currentLang].msg_incomplete);
+                    return;
+                }
+                // 限制輸入範圍以防破圖
+                x = Math.max(0, Math.min(x, GRID_COLS - 1));
+                y = Math.max(0, Math.min(y, GRID_ROWS - 1));
+                
+                currentTowers.push({x, y, r});
+            }
+
+            // 網格搜尋法：遍歷所有整數方格，尋找總誤差最小的方格中心
+            let bestPoint = { x: 0, y: 0 };
+            let minError = Infinity;
+
+            for(let gridX = 0; gridX < GRID_COLS; gridX++) {
+                for(let gridY = 0; gridY < GRID_ROWS; gridY++) {
+                    let totalError = 0;
+                    for(let t of currentTowers) {
+                        // 計算該方格(gridX, gridY)與塔的距離
+                        let calcDist = Math.sqrt(Math.pow(gridX - t.x, 2) + Math.pow(gridY - t.y, 2));
+                        totalError += Math.abs(calcDist - t.r);
+                    }
+
+                    if(totalError < minError) {
+                        minError = totalError;
+                        bestPoint = { x: gridX, y: gridY };
+                    }
+                }
+            }
+
+            calculatedPoint = bestPoint;
+            drawMap(); 
+
+            // 更新結果 UI
+            document.getElementById('result-box').classList.remove('hidden');
+            document.getElementById('result-text').innerText = `(${bestPoint.x}, ${bestPoint.y})`;
+            
+            // 如果誤差超過 0.5 (代表使用者手動輸入的R與完美交點有差距)
+            if(minError > 0.5) {
+                document.getElementById('error-warn').classList.remove('hidden');
+            } else {
+                document.getElementById('error-warn').classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
