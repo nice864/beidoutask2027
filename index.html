@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>北斗戰術終端：補給點定位系統</title>
+    <title>北斗終端：補給點定位系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -72,7 +72,7 @@
             </select>
         </div>
         <h1 class="text-3xl font-bold tracking-tight text-slate-900 flex items-center justify-center gap-3">
-            <span class="text-blue-600">📡</span> <span data-i18n="title">北斗戰術終端：補給點定位系統</span>
+            <span class="text-blue-600">📡</span> <span data-i18n="title">北斗終端：補給點定位系統</span>
         </h1>
         <p class="text-slate-500 mt-3 text-sm" data-i18n="desc">輸入 3 座訊號塔的網格座標與探測距離，系統將自動解算補給點的精確方格。</p>
     </header>
@@ -89,12 +89,12 @@
                     </button>
                 </div>
                 <span class="text-xs font-medium px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full border border-slate-200" data-i18n="gridSize">
-                    網格：25 x 13
+                    網格：24 x 15
                 </span>
             </div>
             <!-- 加大 Canvas 尺寸以容納方格中心繪製，並加入 touch-none 避免手機滑動干擾繪製 -->
             <div class="relative w-fit mx-auto cursor-crosshair">
-                <canvas id="radarCanvas" width="900" height="500" class="mx-auto block touch-none"></canvas>
+                <canvas id="radarCanvas" width="900" height="550" class="mx-auto block touch-none"></canvas>
                 <!-- 互動繪製指示浮層 -->
                 <div id="draw-instruction" class="absolute top-6 left-1/2 -translate-x-1/2 bg-slate-800/95 text-white px-5 py-2.5 rounded-full shadow-xl text-sm font-medium hidden pointer-events-none transition-opacity flex items-center gap-2 z-10 backdrop-blur-sm border border-slate-600">
                     <span class="animate-pulse text-sky-400">●</span>
@@ -130,8 +130,8 @@
                         </button>
                     </div>
                     <div class="grid grid-cols-3 gap-3">
-                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblX">X 座標 (0-24)</label><input type="number" id="t1-x" class="w-full h-10" min="0" max="24" step="1"></div>
-                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblY">Y 座標 (0-12)</label><input type="number" id="t1-y" class="w-full h-10" min="0" max="12" step="1"></div>
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblX">X 座標 (0-23)</label><input type="number" id="t1-x" class="w-full h-10" min="0" max="23" step="1"></div>
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblY">Y 座標 (0-14)</label><input type="number" id="t1-y" class="w-full h-10" min="0" max="14" step="1"></div>
                         <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblR">距離 R</label><input type="number" id="t1-r" class="w-full h-10" min="0" step="0.01"></div>
                     </div>
                 </div>
@@ -149,8 +149,8 @@
                         </button>
                     </div>
                     <div class="grid grid-cols-3 gap-3">
-                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblX">X 座標 (0-24)</label><input type="number" id="t2-x" class="w-full h-10" min="0" max="24" step="1"></div>
-                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblY">Y 座標 (0-12)</label><input type="number" id="t2-y" class="w-full h-10" min="0" max="12" step="1"></div>
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblX">X 座標 (0-23)</label><input type="number" id="t2-x" class="w-full h-10" min="0" max="23" step="1"></div>
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblY">Y 座標 (0-14)</label><input type="number" id="t2-y" class="w-full h-10" min="0" max="14" step="1"></div>
                         <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblR">距離 R</label><input type="number" id="t2-r" class="w-full h-10" min="0" step="0.01"></div>
                     </div>
                 </div>
@@ -168,8 +168,8 @@
                         </button>
                     </div>
                     <div class="grid grid-cols-3 gap-3">
-                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblX">X 座標 (0-24)</label><input type="number" id="t3-x" class="w-full h-10" min="0" max="24" step="1"></div>
-                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblY">Y 座標 (0-12)</label><input type="number" id="t3-y" class="w-full h-10" min="0" max="12" step="1"></div>
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblX">X 座標 (0-23)</label><input type="number" id="t3-x" class="w-full h-10" min="0" max="23" step="1"></div>
+                        <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblY">Y 座標 (0-14)</label><input type="number" id="t3-y" class="w-full h-10" min="0" max="14" step="1"></div>
                         <div><label class="block text-xs font-medium text-slate-500 mb-1" data-i18n-lbl="lblR">距離 R</label><input type="number" id="t3-r" class="w-full h-10" min="0" step="0.01"></div>
                     </div>
                 </div>
@@ -197,8 +197,8 @@
         const ctx = canvas.getContext('2d');
         
         // 畫布與網格設定
-        const GRID_COLS = 25; // X軸格子數 (0~24)
-        const GRID_ROWS = 13; // Y軸格子數 (0~12)
+        const GRID_COLS = 24; // X軸格子數 (0~23)
+        const GRID_ROWS = 15; // Y軸格子數 (0~14)
         const CELL_SIZE = 32; // 每個正方形格子的邊長 (像素)
         
         // 邊距計算，讓網格置中
@@ -234,10 +234,10 @@
         let currentLang = 'zh-TW';
         const translations = {
             'zh-TW': {
-                title: '北斗戰術終端：補給點定位系統',
+                title: '北斗終端：補給點定位系統',
                 desc: '輸入 3 座訊號塔的網格座標與探測距離，系統將自動解算補給點的精確方格。',
                 gridTitle: '戰術網格視圖',
-                gridSize: '網格：25 x 13',
+                gridSize: '網格：24 x 15',
                 resetBtn: '🗑️ 清空重置',
                 gridNote1: '(0,0) 位於左下角方格',
                 gridNote2: '座標為方格中心點',
@@ -247,8 +247,8 @@
                 tower2: '北斗塔 Beta',
                 tower3: '北斗塔 Gamma',
                 drawBtn: '📍 互動點選',
-                lblX: 'X 座標 (0-24)',
-                lblY: 'Y 座標 (0-12)',
+                lblX: 'X 座標 (0-23)',
+                lblY: 'Y 座標 (0-14)',
                 lblR: '距離 R',
                 calcBtn: '執行三角定位解算',
                 resultTitle: '目標鎖定：補給點方格座標',
@@ -258,10 +258,10 @@
                 inst_step2: '【北斗塔 {tower}】點擊第二下確認探測距離 (R)'
             },
             'zh-CN': {
-                title: '北斗战术终端：补给点定位系统',
+                title: '北斗终端：补给点定位系统',
                 desc: '输入 3 座北斗塔的网格坐标与探测距离，系统将自动解算补给点的精确方格。',
                 gridTitle: '战术网格视图',
-                gridSize: '网格：25 x 13',
+                gridSize: '网格：24 x 15',
                 resetBtn: '🗑️ 清空重置',
                 gridNote1: '(0,0) 位于左下角方格',
                 gridNote2: '坐标为方格中心点',
@@ -271,8 +271,8 @@
                 tower2: '北斗塔 Beta',
                 tower3: '北斗塔 Gamma',
                 drawBtn: '📍 互动点选',
-                lblX: 'X 坐标 (0-24)',
-                lblY: 'Y 坐标 (0-12)',
+                lblX: 'X 坐标 (0-23)',
+                lblY: 'Y 坐标 (0-14)',
                 lblR: '距离 R',
                 calcBtn: '执行三角定位解算',
                 resultTitle: '目标锁定：补给点方格坐标',
@@ -282,10 +282,10 @@
                 inst_step2: '【北斗塔 {tower}】点击第二下确认探测距离 (R)'
             },
             'en': {
-                title: 'Tactical Terminal: Supply Locator',
+                title: 'Beidou Terminal: Supply Locator',
                 desc: 'Enter coordinates and detection distances of 3 signal towers, the system calculates the exact grid.',
                 gridTitle: 'Tactical Grid View',
-                gridSize: 'Grid: 25 x 13',
+                gridSize: 'Grid: 24 x 15',
                 resetBtn: '🗑️ Reset',
                 gridNote1: '(0,0) is at bottom-left',
                 gridNote2: 'Coordinates are centers',
@@ -295,8 +295,8 @@
                 tower2: 'Tower Beta',
                 tower3: 'Tower Gamma',
                 drawBtn: '📍 Pick',
-                lblX: 'X Coord (0-24)',
-                lblY: 'Y Coord (0-12)',
+                lblX: 'X Coord (0-23)',
+                lblY: 'Y Coord (0-14)',
                 lblR: 'Distance R',
                 calcBtn: 'Execute Trilateration',
                 resultTitle: 'Target Locked: Supply Point',
@@ -678,7 +678,7 @@
         }
 
         function generateMission() {
-            // 隨機補給點方格 (0-24, 0-12)
+            // 隨機補給點方格 (0-24, 0-14)
             const targetX = Math.floor(Math.random() * GRID_COLS);
             const targetY = Math.floor(Math.random() * GRID_ROWS);
 
